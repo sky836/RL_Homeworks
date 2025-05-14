@@ -22,7 +22,7 @@ class ObservationSpace(spaces.Dict):
         d_theta_2=spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
         super().__init__(spaces.Dict({'theta_l':theta_l, 'theta_r':theta_r, 'theta_1':theta_1, 'theta_2':theta_2,'d_theta_l':d_theta_l, 'd_theta_r':d_theta_r, 'd_theta_1':d_theta_1, 'd_theta_2':d_theta_2}))
 
-class DiscreteEnv(gym.Env):
+class Env_2wheels(gym.Env):
     def __init__(self):
         self.action_space = ActionSpace()
         self.observation_space = ObservationSpace()
