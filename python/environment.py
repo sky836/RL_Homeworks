@@ -19,8 +19,8 @@ class ObservationSpace(spaces.Dict):
         d_theta_lr = spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
         d_theta_1 = spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
         d_theta_2 = spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
-        super().__init__({'theta_lr': theta_lr, 'theta_1': theta_1, 'theta_2': theta_2,
-                          'd_theta_lr': d_theta_lr, 'd_theta_1': d_theta_1, 'd_theta_2': d_theta_2})
+        super().__init__(collections.OrderedDict({'theta_lr': theta_lr, 'theta_1': theta_1, 'theta_2': theta_2,
+                          'd_theta_lr': d_theta_lr, 'd_theta_1': d_theta_1, 'd_theta_2': d_theta_2}))
 
 
 class DiscreteEnv(gym.Env):
@@ -58,6 +58,8 @@ class DiscreteEnv(gym.Env):
         return self.state
 
     def step(self, action):
+
+        dt=0.01
         # 参数
         m_1 = self.params['m_1']
         m_2 = self.params['m_2']
@@ -162,7 +164,7 @@ class DiscreteEnv(gym.Env):
         action_vec = np.array([float(action['u_lr']), float(action['u_lr'])])
         
         # 计算下一个状态
-        next_state_vec = np.matmul(A, state_vec) + np.matmul(B, action_vec)
+        next_state_vec = (np.matmul(A, state_vec) + np.matmul(B, action_vec))*dt+state_vec
         next_state_vec = next_state_vec.reshape(-1, 1)
         
         next_state = collections.OrderedDict({
