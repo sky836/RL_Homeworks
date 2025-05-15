@@ -2,9 +2,11 @@ from environment import DiscreteEnv
 import numpy as np
 import collections
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
-    def __init__(self, env, bins=10):
+    def __init__(self, env:DiscreteEnv, bins=10):
         self.env = env
         self.bins = bins
         
@@ -17,7 +19,7 @@ class DiscreteEnvWrapper:
         self.d_theta_2_bins = np.linspace(-5, 5, bins)
         
         # 离散化动作空间（假设 u_lr ∈ [-1, 1]）
-        self.action_bins = np.linspace(-1, 1, 3)
+        self.action_bins = np.linspace(-1, 1, 7)
         
     def discretize_state(self, state):
         """将连续状态离散化为整数索引"""
@@ -62,7 +64,7 @@ class DiscreteEnvWrapper:
         })
 
 
-def policy_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
+def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
     n_dims = 6  # theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
@@ -78,6 +80,7 @@ def policy_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
         # 策略评估
         while True:
             delta = 0
+            done=False
             for s in np.ndindex(*state_shape):
                 v = V[s]
                 a = policy[s]
@@ -91,10 +94,13 @@ def policy_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
                 # 更新值函数
                 V[s] = reward + gamma * (0 if done else V[s_next].item())
                 delta = max(delta, abs(v - V[s]))
-            
+                if done:
+                    break
             if delta < theta:
                 print('delta:', delta)
                 break
+
+            
         
         # 策略改进
         policy_stable = True
@@ -115,6 +121,8 @@ def policy_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
                 policy_stable = False
         
         if policy_stable:
+            break
+        if done:
             break
     
     return V, policy
@@ -170,17 +178,17 @@ def show_res(history):
     plt.figure(figsize=(10, 8))
     
     plt.subplot(3, 1, 1)
-    plt.plot(history[0, :1000])
+    plt.plot(history[:1000, 0])
     plt.title('Cart Position')
     plt.ylabel('x (m)')
     
     plt.subplot(3, 1, 2)
-    plt.plot(history[2, :1000])
+    plt.plot(history[:1000, 2])
     plt.title('Pole Angle')
     plt.ylabel('theta (rad)')
     
     plt.subplot(3, 1, 3)
-    plt.plot(history[4, :1000])
+    plt.plot(history[:1000, 4])
     plt.title('Control Force')
     plt.ylabel('F (N)')
     plt.xlabel('Time step')
@@ -193,9 +201,9 @@ if __name__ == "__main__":
     env = DiscreteEnv()
     env_wrapper = DiscreteEnvWrapper(env, bins=10)  # 离散化为 5 bins
     
-    # print("Running Policy Iteration...")
-    # V_pi, policy_pi = policy_iteration(env_wrapper)
-    # print("Policy Iteration Completed!")
+    print("Running Policy Iteration...")
+    V_pi, policy_pi = policy_iteration(env_wrapper)
+    print("Policy Iteration Completed!")
     
     # print("\nRunning Value Iteration...")
     # V_vi, policy_vi = value_iteration(env_wrapper)
@@ -206,19 +214,21 @@ if __name__ == "__main__":
 
     V_pi = np.load('V_pi.npy')
     policy_pi = np.load('policy_pi.npy')
-
     state = env.reset()
+    print(env.state)
     history = np.zeros((1000, 5))  # [theta_LR, theta_1, theta_2, action, reward]
     for t in range(1000):
         s = env_wrapper.discretize_state(state)
         action_idx =policy_pi[s]
         action = env_wrapper.get_action_from_idx(action_idx)
+        print(action)
         next_state, reward, terminated, _ = env.step(action)
+        # print(env.state)
         # 确保状态值是数值类型
-        theta_LR = float(next_state['theta_lr'][0])
-        theta_1 = float(next_state['theta_1'][0])
-        theta_2 = float(next_state['theta_2'][0])
-        action = float(action['u_lr'])
+        theta_LR = float(next_state['theta_lr'][0][0])
+        theta_1 = float(next_state['theta_1'][0][0])
+        theta_2 = float(next_state['theta_2'][0][0])
+        action = float(action['u_lr'][0][0])
         reward = float(reward)
         history[t] = np.array([theta_LR, theta_1, theta_2, action, reward])
         # env.render()
