@@ -43,23 +43,16 @@ class DiscreteEnv(gym.Env):
             'g': 9.8,       # 重力加速度 (m/s^2)
             'I_1': (1/12)*0.9*(0.126**2),  # 车体转动惯量
             'I_2': (1/12)*0.1*(0.390**2),   # 摆杆转动惯量
-            'bins': 6,
-            'LR_range': 5,
-            '12_range': np.pi/4,
+            'bins': 10,
+            'LR_range': 5*np.pi,
+            'd_LR_range': 5,
+            'range_12': np.pi,
+            'd_range_12': 5,
             'u_LR_range': 5,
-            'u_sample_rate': 5
+            'u_sample_rate': 5,
+            'action_bins': 7
         }
-
-    def reset(self):
-        self.state = self.observation_space.sample()
-        self.state['d_theta_lr'] = np.zeros((1,), dtype=np.float32)
-        self.state['d_theta_1'] = np.zeros((1,), dtype=np.float32)
-        self.state['d_theta_2'] = np.zeros((1,), dtype=np.float32)
-        return self.state
-
-    def step(self, action):
-
-        dt=0.01
+        dt=self.params['dt']
         # 参数
         m_1 = self.params['m_1']
         m_2 = self.params['m_2']
@@ -142,12 +135,21 @@ class DiscreteEnv(gym.Env):
 
         # 计算结果
         temp = p.I @ q
-        A = np.append([[0, 0, 0, 0, 1, 0, 0, 0],
+        self.A = np.append([[0, 0, 0, 0, 1, 0, 0, 0],
                        [0, 0, 0, 0, 0, 1, 0, 0],
                        [0, 0, 0, 0, 0, 0, 1, 0],
                        [0, 0, 0, 0, 0, 0, 0, 1]], temp[:, 0:8], axis=0)
-        B = np.append([[0, 0], [0, 0], [0, 0], [0, 0]], temp[:, 8:10], axis=0)
-        
+        self.B = np.append([[0, 0], [0, 0], [0, 0], [0, 0]], temp[:, 8:10], axis=0)
+
+    def reset(self):
+        self.state = self.observation_space.sample()
+        self.state['d_theta_lr'] = np.zeros((1,), dtype=np.float32)
+        self.state['d_theta_1'] = np.zeros((1,), dtype=np.float32)
+        self.state['d_theta_2'] = np.zeros((1,), dtype=np.float32)
+        return self.state
+
+    def step(self, action):
+    
         # 确保状态值是数值类型
         state_vec = np.array([
             float(self.state['theta_lr']), 
@@ -164,7 +166,7 @@ class DiscreteEnv(gym.Env):
         action_vec = np.array([float(action['u_lr']), float(action['u_lr'])])
         
         # 计算下一个状态
-        next_state_vec = (np.matmul(A, state_vec) + np.matmul(B, action_vec))*dt+state_vec
+        next_state_vec = (np.matmul(self.A, state_vec) + np.matmul(self.B, action_vec))*self.params['dt']+state_vec
         next_state_vec = next_state_vec.reshape(-1, 1)
         
         next_state = collections.OrderedDict({
@@ -196,8 +198,8 @@ class DiscreteEnv(gym.Env):
         theta_1 = float(state['theta_1'][0])
         theta_2 = float(state['theta_2'][0])
         
-        if (abs(theta_1) > self.params['12_range'] or 
-            abs(theta_2) > self.params['12_range'] or
+        if (abs(theta_1) > self.params['range_12'] or 
+            abs(theta_2) > self.params['range_12'] or
             abs(theta_LR) > self.params['LR_range']):
             return True
         return False

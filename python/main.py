@@ -6,20 +6,26 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
-    def __init__(self, env:DiscreteEnv, bins=10):
+    def __init__(self, env:DiscreteEnv):
         self.env = env
-        self.bins = bins
+        self.bins = env.params['bins']
+        self.a_bins = env.params['action_bins']
+        LR_range = self.env.params['LR_range']
+        range_12 = self.env.params['range_12']
+        u_LR_range = self.env.params['u_LR_range']
+        d_LR_range = self.env.params['d_LR_range']
+        d_range_12 = self.env.params['d_range_12']
         
         # 离散化 theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
-        self.theta_lr_bins = np.linspace(-np.pi, np.pi, bins)
-        self.theta_1_bins = np.linspace(-np.pi, np.pi, bins)
-        self.theta_2_bins = np.linspace(-np.pi, np.pi, bins)
-        self.d_theta_lr_bins = np.linspace(-5, 5, bins)  # 假设角速度范围 [-5, 5]
-        self.d_theta_1_bins = np.linspace(-5, 5, bins)
-        self.d_theta_2_bins = np.linspace(-5, 5, bins)
+        self.theta_lr_bins = np.linspace(-LR_range, LR_range, self.bins)
+        self.theta_1_bins = np.linspace(-range_12, range_12, self.bins)
+        self.theta_2_bins = np.linspace(-range_12, range_12, self.bins)
+        self.d_theta_lr_bins = np.linspace(-d_LR_range, d_LR_range, self.bins)  # 假设角速度范围 [-5, 5]
+        self.d_theta_1_bins = np.linspace(-d_range_12, d_range_12, self.bins)
+        self.d_theta_2_bins = np.linspace(-d_range_12, d_range_12, self.bins)
         
         # 离散化动作空间（假设 u_lr ∈ [-1, 1]）
-        self.action_bins = np.linspace(-1, 1, 7)
+        self.action_bins = np.linspace(-u_LR_range, u_LR_range, self.a_bins)
         
     def discretize_state(self, state):
         """将连续状态离散化为整数索引"""
@@ -69,7 +75,7 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
     n_bins = env_wrapper.bins
     n_dims = 6  # theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
     n_states = n_bins ** n_dims  # 例如 10^6 = 1,000,000
-    n_actions = 3
+    n_actions = env_wrapper.a_bins
     state_shape = (n_bins,) * n_dims
     
     # 初始化值函数和策略
@@ -98,9 +104,7 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
                     break
             if delta < theta:
                 print('delta:', delta)
-                break
-
-            
+                break    
         
         # 策略改进
         policy_stable = True
@@ -133,7 +137,7 @@ def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     n_bins = env_wrapper.bins
     n_dims = 6  # theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
     n_states = n_bins ** n_dims  # 例如 10^6 = 1,000,000
-    n_actions = 3
+    n_actions = env_wrapper.a_bins
     state_shape = (n_bins,) * n_dims
     
     V = np.zeros(state_shape)
@@ -173,6 +177,46 @@ def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     
     return V, policy
 
+
+def q_learning(env_wrapper, gamma=0.99, alpha=0.1, epsilon=0.1, episodes=10000):
+    env = env_wrapper.env
+    n_bins = env_wrapper.bins
+    n_dims = 6  # 状态维度
+    n_actions = env_wrapper.a_bins
+    state_shape = (n_bins,) * n_dims
+
+    # 初始化 Q 表
+    Q = np.zeros(state_shape + (n_actions,))
+
+    for _ in range(episodes):
+        # 初始化状态
+        state = env.reset()
+        s = env_wrapper.discretize_state(state)
+        done = False
+
+        while not done:
+            # ε-greedy 选择动作
+            if np.random.rand() < epsilon:
+                a = np.random.randint(n_actions)
+            else:
+                a = np.argmax(Q[s])
+
+            # 执行动作
+            action = env_wrapper.get_action_from_idx(a)
+            next_state, reward, done, _ = env.step(action)
+            s_next = env_wrapper.discretize_state(next_state)
+
+            # Q-learning 更新
+            Q_target = reward + gamma * np.max(Q[s_next]) if not done else reward
+            Q[s + (a,)] += alpha * (Q_target - Q[s + (a,)])
+
+            # 转移到下一个状态
+            s = s_next
+
+    # 从 Q 表提取最优策略
+    policy = np.argmax(Q, axis=-1)
+    return Q, policy
+
 def show_res(history):
     # Plot test results
     plt.figure(figsize=(10, 8))
@@ -199,11 +243,15 @@ def show_res(history):
 
 if __name__ == "__main__":
     env = DiscreteEnv()
-    env_wrapper = DiscreteEnvWrapper(env, bins=10)  # 离散化为 5 bins
+    env_wrapper = DiscreteEnvWrapper(env)  # 离散化为 5 bins
     
-    print("Running Policy Iteration...")
-    V_pi, policy_pi = policy_iteration(env_wrapper)
-    print("Policy Iteration Completed!")
+    # print("Running Policy Iteration...")
+    # V_pi, policy_pi = policy_iteration(env_wrapper)
+    # print("Policy Iteration Completed!")
+    
+    print("Running Q Learning...")
+    Q, policy_q = q_learning(env_wrapper)
+    print("Q Learning Completed!")
     
     # print("\nRunning Value Iteration...")
     # V_vi, policy_vi = value_iteration(env_wrapper)
@@ -212,16 +260,16 @@ if __name__ == "__main__":
     # # 比较两种算法的策略是否一致
     # print("\nPolicy Difference:", np.sum(policy_pi != policy_vi))
 
-    V_pi = np.load('V_pi.npy')
-    policy_pi = np.load('policy_pi.npy')
+    # V_pi = np.load('V_pi.npy')
+    # policy_pi = np.load('policy_pi.npy')
     state = env.reset()
     print(env.state)
     history = np.zeros((1000, 5))  # [theta_LR, theta_1, theta_2, action, reward]
     for t in range(1000):
         s = env_wrapper.discretize_state(state)
-        action_idx =policy_pi[s]
+        action_idx =policy_q[s]
         action = env_wrapper.get_action_from_idx(action_idx)
-        print(action)
+        # print(action)
         next_state, reward, terminated, _ = env.step(action)
         # print(env.state)
         # 确保状态值是数值类型
@@ -231,7 +279,7 @@ if __name__ == "__main__":
         action = float(action['u_lr'][0][0])
         reward = float(reward)
         history[t] = np.array([theta_LR, theta_1, theta_2, action, reward])
-        # env.render()
+        env.render()
         if terminated:
             state = env.reset()
     env.close()
