@@ -43,14 +43,15 @@ class DiscreteEnv(gym.Env):
             'g': 9.8,       # 重力加速度 (m/s^2)
             'I_1': (1/12)*0.9*(0.126**2),  # 车体转动惯量
             'I_2': (1/12)*0.1*(0.390**2),   # 摆杆转动惯量
-            'bins': 10,
+            'bins': 20,
             'LR_range': 5*np.pi,
             'd_LR_range': 5,
-            'range_12': np.pi,
+            'range_1': np.pi/2,
+            'range_2': np.pi,
             'd_range_12': 5,
             'u_LR_range': 5,
             'u_sample_rate': 5,
-            'action_bins': 7
+            'action_bins': 14
         }
         dt=self.params['dt']
         # 参数
@@ -186,67 +187,102 @@ class DiscreteEnv(gym.Env):
         return next_state, reward, terminated, {}
 
     def get_reward(self, state, action):
+        l1 = self.params['L_1']
+        l2 = self.params['L_2']
+        r = self.params['r']
         theta_LR = float(state['theta_lr'])
         theta_1 = float(state['theta_1'])
         theta_2 = float(state['theta_2'])
-        reward = -(100 * np.abs(theta_1) + 100 * np.abs(theta_2) + 2 * np.abs(theta_LR))
-        reward -= float(action['u_lr']) ** 2
+        d_theta_lr = float(state['d_theta_lr'])
+        d_theta_1 = float(state['d_theta_1'])
+        d_theta_2 = float(state['d_theta_2'])
+        l_now = l1*np.cos(theta_1) + l2*np.cos(theta_2) + 2*r
+        L = l1 + l2 + 2*r
+
+        # reward = -(100 * np.abs(theta_1) + 100 * np.abs(theta_2) + 2 * np.abs(theta_LR))
+        if l_now >= L*0.9:
+            healthy_reward = 10
+        else:
+            healthy_reward = -10
+        velocity_penalty = 0.001*d_theta_1 + 0.0001*d_theta_2
+        distance_penalty = 0.01*np.abs(theta_LR * r)
+        reward = healthy_reward - velocity_penalty - distance_penalty
         return reward
 
     def is_terminated(self, state):
+        l1 = self.params['L_1']
+        l2 = self.params['L_2']
+        r = self.params['r']
         theta_LR = float(state['theta_lr'][0])
         theta_1 = float(state['theta_1'][0])
         theta_2 = float(state['theta_2'][0])
-        
-        if (abs(theta_1) > self.params['range_12'] or 
-            abs(theta_2) > self.params['range_12'] or
-            abs(theta_LR) > self.params['LR_range']):
+        l_now = l1*np.cos(theta_1) + l2*np.cos(theta_2) + 2*r
+        min_l = l2 + 2*r
+
+        if l_now < min_l:
             return True
         return False
 
     def render(self):
-        """Render the current state of the environment"""
+        """Render the current state of the environment with two distinct poles"""
         if self.fig is None:
             plt.ion()
             self.fig, self.ax = plt.subplots(figsize=(8, 6))
-            self.ax.set_xlim(-2, 2)
-            self.ax.set_ylim(-1, 1)
+            
+            # 动态设置坐标范围（基于摆杆长度）
+            max_length = self.params['L_1'] + self.params['L_2']
+            self.ax.set_xlim(-max_length - 0.5, max_length + 0.5)
+            self.ax.set_ylim(-max_length * 0.2, max_length * 1.5)
             self.ax.set_aspect('equal')
             self.ax.grid(True)
             
-            # Initialize plot objects
+            # 初始化绘图对象
             self.cart = plt.Rectangle((-0.2, -0.1), 0.4, 0.2, fc='blue')
             self.wheel_left = plt.Circle((-0.15, -0.15), 0.05, fc='black')
             self.wheel_right = plt.Circle((0.15, -0.15), 0.05, fc='black')
-            self.pole, = self.ax.plot([0, 0], [0, 0.5], 'r-', lw=3)
+            
+            # 第一段摆杆（红色）
+            self.pole1, = self.ax.plot([0, 0], [0, 0], 'r-', lw=3)
+            # 第二段摆杆（绿色）
+            self.pole2, = self.ax.plot([0, 0], [0, 0], 'g-', lw=3)
+            # 铰链标记（黑色圆点）
+            self.joint = plt.Circle((0, 0), 0.03, fc='black')
             
             self.ax.add_patch(self.cart)
             self.ax.add_patch(self.wheel_left)
             self.ax.add_patch(self.wheel_right)
-        
+            self.ax.add_patch(self.joint)
+
         # 确保状态值是数值类型
         theta_LR = float(self.state['theta_lr'][0])
         theta_1 = float(self.state['theta_1'][0])
         theta_2 = float(self.state['theta_2'][0])
         
-        # Cart position (simplified)
-        cart_x = theta_LR * self.params['r']  # Convert wheel angle to position
+        # 小车位置（简化模型）
+        cart_x = theta_LR * self.params['r']
         
-        # Update cart position
+        # 更新小车和轮子位置
         self.cart.set_xy((cart_x - 0.2, -0.1))
         self.wheel_left.center = (cart_x - 0.15, -0.15)
         self.wheel_right.center = (cart_x + 0.15, -0.15)
         
-        # Update pole position (combining both angles)
-        pole_x1 = cart_x
-        pole_y1 = 0
-        pole_x2 = cart_x + np.sin(theta_1 + theta_2) * self.params['L_2']
-        pole_y2 = np.cos(theta_1 + theta_2) * self.params['L_2']
-        self.pole.set_data([pole_x1, pole_x2], [pole_y1, pole_y2])
+        # 计算第一段摆杆的末端位置（铰链点）
+        pole1_x = cart_x + np.sin(theta_1) * self.params['L_1']
+        pole1_y = np.cos(theta_1) * self.params['L_1']
         
+        # 计算第二段摆杆的末端位置（基于第一段的角度叠加）
+        pole2_x = pole1_x + np.sin(theta_2) * self.params['L_2']
+        pole2_y = pole1_y + np.cos(theta_2) * self.params['L_2']
+        
+        # 更新摆杆和铰链位置
+        self.pole1.set_data([cart_x, pole1_x], [0, pole1_y])  # 第一段（红）
+        self.pole2.set_data([pole1_x, pole2_x], [pole1_y, pole2_y])  # 第二段（绿）
+        self.joint.center = (pole1_x, pole1_y)  # 铰链标记
+        
+        # 强制刷新图像
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
-        plt.pause(0.01)  # 添加短暂暂停以确保图像更新
+        plt.pause(0.01)
     
     def close(self):
         if self.fig is not None:

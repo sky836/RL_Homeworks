@@ -3,6 +3,7 @@ import numpy as np
 import collections
 import matplotlib.pyplot as plt
 import warnings
+import time
 warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
@@ -11,15 +12,16 @@ class DiscreteEnvWrapper:
         self.bins = env.params['bins']
         self.a_bins = env.params['action_bins']
         LR_range = self.env.params['LR_range']
-        range_12 = self.env.params['range_12']
+        range_1 = self.env.params['range_1']
+        range_2 = self.env.params['range_2']
         u_LR_range = self.env.params['u_LR_range']
         d_LR_range = self.env.params['d_LR_range']
         d_range_12 = self.env.params['d_range_12']
         
         # 离散化 theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
         self.theta_lr_bins = np.linspace(-LR_range, LR_range, self.bins)
-        self.theta_1_bins = np.linspace(-range_12, range_12, self.bins)
-        self.theta_2_bins = np.linspace(-range_12, range_12, self.bins)
+        self.theta_1_bins = np.linspace(-range_1, range_1, self.bins)
+        self.theta_2_bins = np.linspace(-range_2, range_2, self.bins)
         self.d_theta_lr_bins = np.linspace(-d_LR_range, d_LR_range, self.bins)  # 假设角速度范围 [-5, 5]
         self.d_theta_1_bins = np.linspace(-d_range_12, d_range_12, self.bins)
         self.d_theta_2_bins = np.linspace(-d_range_12, d_range_12, self.bins)
@@ -178,7 +180,7 @@ def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     return V, policy
 
 
-def q_learning(env_wrapper, gamma=0.99, alpha=0.1, epsilon=0.1, episodes=10000):
+def q_learning(env_wrapper, gamma=0.01, alpha=0.5, epsilon=0.1, episodes=100000):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
     n_dims = 6  # 状态维度
@@ -221,20 +223,31 @@ def show_res(history):
     # Plot test results
     plt.figure(figsize=(10, 8))
     
-    plt.subplot(3, 1, 1)
-    plt.plot(history[:1000, 0])
+    plt.subplot(5, 1, 1)
+    plt.plot(history[:, 0])
     plt.title('Cart Position')
     plt.ylabel('x (m)')
     
-    plt.subplot(3, 1, 2)
-    plt.plot(history[:1000, 2])
-    plt.title('Pole Angle')
+    plt.subplot(5, 1, 2)
+    plt.plot(history[:, 1])
+    plt.title('first Pole Angle')
+    plt.ylabel('theta (rad)')
+
+    plt.subplot(5, 1, 3)
+    plt.plot(history[:, 2])
+    plt.title('Second Pole Angle')
     plt.ylabel('theta (rad)')
     
-    plt.subplot(3, 1, 3)
-    plt.plot(history[:1000, 4])
+    plt.subplot(5, 1, 4)
+    plt.plot(history[:, 3])
     plt.title('Control Force')
     plt.ylabel('F (N)')
+    plt.xlabel('Time step')
+
+    plt.subplot(5, 1, 5)
+    plt.plot(history[:, 4])
+    plt.title('Reward')
+    plt.ylabel('v')
     plt.xlabel('Time step')
     
     plt.tight_layout()
@@ -250,7 +263,10 @@ if __name__ == "__main__":
     # print("Policy Iteration Completed!")
     
     print("Running Q Learning...")
+    begin_time = time.time()
     Q, policy_q = q_learning(env_wrapper)
+    cost = time.time()-begin_time
+    print('cost time:', cost)
     print("Q Learning Completed!")
     
     # print("\nRunning Value Iteration...")
@@ -264,10 +280,12 @@ if __name__ == "__main__":
     # policy_pi = np.load('policy_pi.npy')
     state = env.reset()
     print(env.state)
-    history = np.zeros((1000, 5))  # [theta_LR, theta_1, theta_2, action, reward]
-    for t in range(1000):
+    l = 2000
+    history = np.zeros((l, 5))  # [theta_LR, theta_1, theta_2, action, reward]
+    for t in range(l):
         s = env_wrapper.discretize_state(state)
         action_idx =policy_q[s]
+        # print(action_idx)
         action = env_wrapper.get_action_from_idx(action_idx)
         # print(action)
         next_state, reward, terminated, _ = env.step(action)
