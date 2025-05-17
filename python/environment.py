@@ -1,8 +1,10 @@
+from typing import OrderedDict
 import gymnasium as gym
-from gymnasium import spaces
+from gymnasium import Wrapper, spaces,ObservationWrapper,ActionWrapper
 from matplotlib import pyplot as plt
 import numpy as np
 import collections
+
 
 
 class ActionSpace(spaces.Dict):
@@ -21,12 +23,92 @@ class ObservationSpace(spaces.Dict):
         d_theta_2 = spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32)
         super().__init__(collections.OrderedDict({'theta_lr': theta_lr, 'theta_1': theta_1, 'theta_2': theta_2,
                           'd_theta_lr': d_theta_lr, 'd_theta_1': d_theta_1, 'd_theta_2': d_theta_2}))
+        
+
+class DiscreteWrapper(Wrapper):
+    def __init__(self,env,obs_bins=5,act_bins=5):
+        super().__init__(env)
+        self.obs_bins=obs_bins
+        self.act_bins=act_bins
+        self.theta_lr_bins = np.linspace(-np.pi, np.pi, obs_bins)
+        self.theta_1_bins = np.linspace(-np.pi, np.pi, obs_bins)
+        self.theta_2_bins = np.linspace(-np.pi, np.pi, obs_bins)
+        self.d_theta_lr_bins = np.linspace(-5, 5, obs_bins)  # 假设角速度范围 [-5, 5]
+        self.d_theta_1_bins = np.linspace(-5, 5, obs_bins)
+        self.d_theta_2_bins = np.linspace(-5, 5, obs_bins)
+
+        # 离散化动作空间（假设 u_lr ∈ [-1, 1]）
+        self.action_bins = np.linspace(-1, 1, act_bins)
 
 
-class DiscreteEnv(gym.Env):
+        self.reset=ObservationWrapper.reset
+
+    def observation(self, observation):
+        """将连续状态离散化为整数索引"""
+        discrete_observation=observation
+        for key,value in observation:
+            if key in ['theta_lr', 'theta_1', 'theta_2', 'd_theta_lr', 'd_theta_1', 'd_theta_2']:
+                discrete_observation[key] = np.digitize(value, getattr(self, f"{key}_bins")) - 1
+            else:
+                discrete_observation[key] = value
+        return discrete_observation
+
+    def action(self, action):
+        """将离散动作索引转换为连续动作"""
+        u_lr_idx = np.digitize(action['u_lr'], self.action_bins) - 1
+        return collections.OrderedDict({'u_lr': np.array([self.action_bins[u_lr_idx]], dtype=np.float32)})
+
+    def step(self, action):
+        observation, reward, terminated, truncated, info = self.env.step(self.action(action))
+        return self.observation(observation), reward, terminated, truncated, info
+    
+
+
+
+
+class DiscreteObservationWrapper(ObservationWrapper):
+    def __init__(self, env, bins=10):
+        super().__init__(env)
+        self.bins = bins
+        
+        # 离散化 theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
+        self.theta_lr_bins = np.linspace(-np.pi, np.pi, bins)
+        self.theta_1_bins = np.linspace(-np.pi, np.pi, bins)
+        self.theta_2_bins = np.linspace(-np.pi, np.pi, bins)
+        self.d_theta_lr_bins = np.linspace(-5, 5, bins)  # 假设角速度范围 [-5, 5]
+        self.d_theta_1_bins = np.linspace(-5, 5, bins)
+        self.d_theta_2_bins = np.linspace(-5, 5, bins)
+
+    def observation(self, observation):
+        """将连续状态离散化为整数索引"""
+        discrete_observation=observation
+        for key,value in observation:
+            if key in ['theta_lr', 'theta_1', 'theta_2', 'd_theta_lr', 'd_theta_1', 'd_theta_2']:
+                discrete_observation[key] = np.digitize(value, getattr(self, f"{key}_bins")) - 1
+            else:
+                discrete_observation[key] = value
+        return discrete_observation
+    
+class DiscreteActionWrapper(ActionWrapper):
+    def __init__(self, env, bins=10):
+        super().__init__(env)
+        self.bins = bins
+        
+        # 离散化动作空间（假设 u_lr ∈ [-1, 1]）
+        self.action_bins = np.linspace(-1, 1, bins)
+
+    def action(self, action):
+        """将离散动作索引转换为连续动作"""
+        u_lr_idx = np.digitize(action['u_lr'], self.action_bins) - 1
+        return collections.OrderedDict({'u_lr': np.array([self.action_bins[u_lr_idx]], dtype=np.float32)})
+
+
+class Environment(gym.Env):
     def __init__(self):
         self.action_space = ActionSpace()
-        self.observation_space = ObservationSpace()
+        self.observation_space=ObservationSpace()
+
+        # self.observation_space = ObservationSpace()
         self.state = collections.OrderedDict()
         self.reset()
         self.fig = None
@@ -253,7 +335,7 @@ class DiscreteEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    env = DiscreteEnv()
+    env = Environment()
     state = env.reset()
     
     for _ in range(1000):

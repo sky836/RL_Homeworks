@@ -1,4 +1,4 @@
-from environment import DiscreteEnv
+from environment import *
 import numpy as np
 import collections
 import matplotlib.pyplot as plt
@@ -6,7 +6,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
-    def __init__(self, env:DiscreteEnv, bins=10):
+    def __init__(self, env:Environment, bins=10):
         self.env = env
         self.bins = bins
         
@@ -62,8 +62,6 @@ class DiscreteEnvWrapper:
             'd_theta_1': np.array([d_theta_1], dtype=np.float32),
             'd_theta_2': np.array([d_theta_2], dtype=np.float32)
         })
-
-
 def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
@@ -126,7 +124,6 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
             break
     
     return V, policy
-
 
 def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
@@ -197,8 +194,14 @@ def show_res(history):
     plt.show()
 
 
+def test():
+    env=Environment()
+    observation_wrapper=DiscreteEnvWrapper(env, bins=10)  
+    
+
+
 if __name__ == "__main__":
-    env = DiscreteEnv()
+    env = Environment()
     env_wrapper = DiscreteEnvWrapper(env, bins=10)  # 离散化为 5 bins
     
     print("Running Policy Iteration...")
