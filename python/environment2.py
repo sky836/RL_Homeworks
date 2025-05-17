@@ -2,7 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import collections
-
+# 完成度没有environment.py高，弃用
 
 class ActionSpace(spaces.Dict):
     def __init__(self):
