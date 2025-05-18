@@ -86,7 +86,6 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
         # 策略评估
         while True:
             delta = 0
-            done=False
             for s in np.ndindex(*state_shape):
                 v = V[s]
                 a = policy[s]
@@ -100,8 +99,7 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
                 # 更新值函数
                 V[s] = reward + gamma * (0 if done else V[s_next].item())
                 delta = max(delta, abs(v - V[s]))
-                if done:
-                    break
+
             if delta < theta:
                 print('delta:', delta)
                 break    
@@ -126,8 +124,7 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
         
         if policy_stable:
             break
-        if done:
-            break
+
     
     return V, policy
 
