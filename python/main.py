@@ -131,6 +131,28 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
     
     return V, policy
 
+def test_policy_iteration(env_wrapper:DiscreteWrapper,gamma=0.99, max_iter=1000, theta=1e-4):
+    n_bins=env_wrapper.bins
+    n_dims=len(env_wrapper.env.update_params.range)
+    n_actions = env_wrapper.a_bins
+    state_shape = (n_bins,) * n_dims
+    V=np.zeros(state_shape)
+    policy=np.random.randint(0, n_actions, size=state_shape)
+
+    # for _ in range(max_iter):
+    #     #策略评估
+    #     while True:
+    #         delta = 0
+    #         for s in 
+    #         if delta < theta:
+    #             break
+        
+
+    
+            
+                
+
+
 def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
