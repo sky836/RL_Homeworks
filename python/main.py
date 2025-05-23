@@ -280,7 +280,7 @@ if __name__ == "__main__":
     # policy_pi = np.load('policy_pi.npy')
     state = env.reset()
     print(env.state)
-    l = 2000
+    l = 500
     history = np.zeros((l, 5))  # [theta_LR, theta_1, theta_2, action, reward]
     for t in range(l):
         s = env_wrapper.discretize_state(state)
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         action = float(action['u_lr'][0][0])
         reward = float(reward)
         history[t] = np.array([theta_LR, theta_1, theta_2, action, reward])
-        env.render()
+        # env.render()
         if terminated:
             state = env.reset()
     env.close()

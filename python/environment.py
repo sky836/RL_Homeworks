@@ -200,12 +200,13 @@ class DiscreteEnv(gym.Env):
         L = l1 + l2 + 2*r
 
         # reward = -(100 * np.abs(theta_1) + 100 * np.abs(theta_2) + 2 * np.abs(theta_LR))
-        if l_now >= L*0.9:
+        if l_now >= L*0.7:
             healthy_reward = 10
         else:
             healthy_reward = -10
         velocity_penalty = 0.001*d_theta_1 + 0.0001*d_theta_2
         distance_penalty = 0.01*np.abs(theta_LR * r)
+        theta_penalty = np.abs(theta_1) + np.abs(theta_2)
         reward = healthy_reward - velocity_penalty - distance_penalty
         return reward
 
@@ -217,7 +218,7 @@ class DiscreteEnv(gym.Env):
         theta_1 = float(state['theta_1'][0])
         theta_2 = float(state['theta_2'][0])
         l_now = l1*np.cos(theta_1) + l2*np.cos(theta_2) + 2*r
-        min_l = l2 + 2*r
+        min_l = l2 + 2*r + l1*0.1
 
         if l_now < min_l:
             return True
