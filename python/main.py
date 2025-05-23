@@ -1,4 +1,4 @@
-from environment import DiscreteEnv
+from environment import *
 import numpy as np
 import collections
 import matplotlib.pyplot as plt
@@ -7,7 +7,7 @@ import time
 warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
-    def __init__(self, env:DiscreteEnv):
+    def __init__(self, env:Environment, bins=10):
         self.env = env
         self.bins = env.params['bins']
         self.a_bins = env.params['action_bins']
@@ -70,8 +70,6 @@ class DiscreteEnvWrapper:
             'd_theta_1': np.array([d_theta_1], dtype=np.float32),
             'd_theta_2': np.array([d_theta_2], dtype=np.float32)
         })
-
-
 def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
@@ -88,7 +86,6 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
         # 策略评估
         while True:
             delta = 0
-            done=False
             for s in np.ndindex(*state_shape):
                 v = V[s]
                 a = policy[s]
@@ -102,8 +99,7 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
                 # 更新值函数
                 V[s] = reward + gamma * (0 if done else V[s_next].item())
                 delta = max(delta, abs(v - V[s]))
-                if done:
-                    break
+
             if delta < theta:
                 print('delta:', delta)
                 break    
@@ -128,10 +124,30 @@ def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, 
         
         if policy_stable:
             break
-        if done:
-            break
+
     
     return V, policy
+
+def test_policy_iteration(env_wrapper:DiscreteWrapper,gamma=0.99, max_iter=1000, theta=1e-4):
+    n_bins=env_wrapper.bins
+    n_dims=len(env_wrapper.env.update_params.range)
+    n_actions = env_wrapper.a_bins
+    state_shape = (n_bins,) * n_dims
+    V=np.zeros(state_shape)
+    policy=np.random.randint(0, n_actions, size=state_shape)
+
+    # for _ in range(max_iter):
+    #     #策略评估
+    #     while True:
+    #         delta = 0
+    #         for s in 
+    #         if delta < theta:
+    #             break
+        
+
+    
+            
+                
 
 
 def value_iteration(env_wrapper, gamma=0.99, max_iter=1000, theta=1e-4):
@@ -254,9 +270,15 @@ def show_res(history):
     plt.show()
 
 
+def test():
+    env=Environment()
+    observation_wrapper=DiscreteEnvWrapper(env, bins=10)  
+    
+
+
 if __name__ == "__main__":
-    env = DiscreteEnv()
-    env_wrapper = DiscreteEnvWrapper(env)  # 离散化为 5 bins
+    env = Environment()
+    env_wrapper = DiscreteEnvWrapper(env, bins=10)  # 离散化为 5 bins
     
     # print("Running Policy Iteration...")
     # V_pi, policy_pi = policy_iteration(env_wrapper)
