@@ -67,7 +67,7 @@ class Environment(gym.Env):
             'g': 9.8,       # 重力加速度 (m/s^2)
             'I_1': (1/12)*0.9*(0.126**2),  # 车体转动惯量
             'I_2': (1/12)*0.1*(0.390**2),   # 摆杆转动惯量
-            'bins': 20,
+            'bins': 10,
             'LR_range': 5*np.pi,
             'd_LR_range': 5,
             'range_1': np.pi/2,
@@ -75,7 +75,7 @@ class Environment(gym.Env):
             'd_range_12': 5,
             'u_LR_range': 5,
             'u_sample_rate': 5,
-            'action_bins': 14
+            'action_bins': 5
         }
         dt=self.params['dt']
         # 参数
@@ -225,7 +225,7 @@ class Environment(gym.Env):
         L = l1 + l2 + 2*r
 
         # reward = -(100 * np.abs(theta_1) + 100 * np.abs(theta_2) + 2 * np.abs(theta_LR))
-        if l_now >= L*0.7:
+        if l_now >= L*0.75:
             healthy_reward = 10
         else:
             healthy_reward = -10
@@ -233,6 +233,7 @@ class Environment(gym.Env):
         distance_penalty = 0.01*np.abs(theta_LR * r)
         theta_penalty = np.abs(theta_1) + np.abs(theta_2)
         reward = healthy_reward - velocity_penalty - distance_penalty
+        # reward = -theta_penalty - distance_penalty - velocity_penalty
         return reward
 
     def is_terminated(self, state):
@@ -243,8 +244,14 @@ class Environment(gym.Env):
         theta_1 = float(state['theta_1'][0])
         theta_2 = float(state['theta_2'][0])
         l_now = l1*np.cos(theta_1) + l2*np.cos(theta_2) + 2*r
-        min_l = l2 + 2*r + l1*0.1
+        min_l = l2 + 2*r + l1*0.0
 
+        range_1 = self.params['range_1']
+        range_2 = self.params['range_2']
+        range_LR = self.params['LR_range']
+
+        # if theta_1 < -range_1 and theta_1 > range_1 and theta_2 < -range_2 and theta_2 > range_2 and theta_LR < -range_LR and theta_LR > range_LR:
+        #     return True
         if l_now < min_l:
             return True
         return False

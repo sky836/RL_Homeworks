@@ -7,7 +7,7 @@ import time
 warnings.filterwarnings('ignore')
 
 class DiscreteEnvWrapper:
-    def __init__(self, env:Environment, bins=10):
+    def __init__(self, env:Environment):
         self.env = env
         self.bins = env.params['bins']
         self.a_bins = env.params['action_bins']
@@ -31,12 +31,13 @@ class DiscreteEnvWrapper:
         
     def discretize_state(self, state):
         """将连续状态离散化为整数索引"""
-        theta_lr_idx = np.digitize(state['theta_lr'], self.theta_lr_bins) - 1
-        theta_1_idx = np.digitize(state['theta_1'], self.theta_1_bins) - 1
-        theta_2_idx = np.digitize(state['theta_2'], self.theta_2_bins) - 1
-        d_theta_lr_idx = np.digitize(state['d_theta_lr'], self.d_theta_lr_bins) - 1
-        d_theta_1_idx = np.digitize(state['d_theta_1'], self.d_theta_1_bins) - 1
-        d_theta_2_idx = np.digitize(state['d_theta_2'], self.d_theta_2_bins) - 1
+        # 确保索引在有效范围内
+        theta_lr_idx = np.clip(np.digitize(state['theta_lr'], self.theta_lr_bins) - 1, 0, self.bins-1)
+        theta_1_idx = np.clip(np.digitize(state['theta_1'], self.theta_1_bins) - 1, 0, self.bins-1)
+        theta_2_idx = np.clip(np.digitize(state['theta_2'], self.theta_2_bins) - 1, 0, self.bins-1)
+        d_theta_lr_idx = np.clip(np.digitize(state['d_theta_lr'], self.d_theta_lr_bins) - 1, 0, self.bins-1)
+        d_theta_1_idx = np.clip(np.digitize(state['d_theta_1'], self.d_theta_1_bins) - 1, 0, self.bins-1)
+        d_theta_2_idx = np.clip(np.digitize(state['d_theta_2'], self.d_theta_2_bins) - 1, 0, self.bins-1)
         return (theta_lr_idx, theta_1_idx, theta_2_idx, d_theta_lr_idx, d_theta_1_idx, d_theta_2_idx)
     
     def discretize_action(self, action):
@@ -70,6 +71,62 @@ class DiscreteEnvWrapper:
             'd_theta_1': np.array([d_theta_1], dtype=np.float32),
             'd_theta_2': np.array([d_theta_2], dtype=np.float32)
         })
+
+def compute_model_matrices(env_wrapper, n_samples=1000):
+    """
+    计算状态转移概率矩阵和奖励矩阵
+    
+    Args:
+        env_wrapper: 离散化环境包装器
+        n_samples: 每个状态-动作对采样的次数
+    
+    Returns:
+        P: 状态转移概率矩阵，形状为 (n_states, n_actions, n_states)
+        R: 奖励矩阵，形状为 (n_states, n_actions)
+    """
+    env = env_wrapper.env
+    n_bins = env_wrapper.bins
+    n_dims = 6  # theta_lr, theta_1, theta_2, d_theta_lr, d_theta_1, d_theta_2
+    n_actions = env_wrapper.a_bins
+    state_shape = (n_bins,) * n_dims
+    
+    # 初始化转移概率矩阵和奖励矩阵
+    n_states = n_bins ** n_dims
+    P = np.zeros((n_states, n_actions, n_states))
+    R = np.zeros((n_states, n_actions))
+    
+    # 对每个状态-动作对进行采样
+    for s_idx in range(n_states):
+        # 将一维索引转换为多维索引
+        s = np.unravel_index(s_idx, state_shape)
+        state = env_wrapper.get_continuous_state(s)
+        
+        for a in range(n_actions):
+            action = env_wrapper.get_action_from_idx(a)
+            rewards = []
+            next_states = []
+            
+            # 对每个状态-动作对进行多次采样
+            for _ in range(n_samples):
+                env.state = state.copy()
+                next_state, reward, done, _ = env.step(action)
+
+                s_next = env_wrapper.discretize_state(next_state)
+                s_next_idx = np.ravel_multi_index(s_next, state_shape)
+                
+                next_states.append(s_next_idx)
+                rewards.append(reward)
+            
+            # 计算转移概率
+            next_states = np.array(next_states)
+            for s_next_idx in range(n_states):
+                P[s_idx, a, s_next_idx] = np.mean(next_states == s_next_idx)
+            
+            # 计算期望奖励
+            R[s_idx, a] = np.mean(rewards)
+    
+    return P, R
+
 def policy_iteration(env_wrapper:DiscreteEnvWrapper, gamma=0.99, max_iter=1000, theta=1e-4):
     env = env_wrapper.env
     n_bins = env_wrapper.bins
@@ -278,7 +335,9 @@ def test():
 
 if __name__ == "__main__":
     env = Environment()
-    env_wrapper = DiscreteEnvWrapper(env, bins=10)  # 离散化为 5 bins
+    env_wrapper = DiscreteEnvWrapper(env)  # 离散化为 5 bins
+
+    # P, R = compute_model_matrices(env_wrapper, n_samples=1000)
     
     # print("Running Policy Iteration...")
     # V_pi, policy_pi = policy_iteration(env_wrapper)
@@ -286,7 +345,7 @@ if __name__ == "__main__":
     
     print("Running Q Learning...")
     begin_time = time.time()
-    Q, policy_q = q_learning(env_wrapper)
+    # Q, policy_q = q_learning(env_wrapper)
     cost = time.time()-begin_time
     print('cost time:', cost)
     print("Q Learning Completed!")
@@ -300,9 +359,13 @@ if __name__ == "__main__":
 
     # V_pi = np.load('V_pi.npy')
     # policy_pi = np.load('policy_pi.npy')
+    
+    # np.save('policy_q.npy', policy_q)
+    policy_q = np.load('policy_q.npy')
+
     state = env.reset()
     print(env.state)
-    l = 500
+    l = 1000
     history = np.zeros((l, 5))  # [theta_LR, theta_1, theta_2, action, reward]
     for t in range(l):
         s = env_wrapper.discretize_state(state)
@@ -319,7 +382,7 @@ if __name__ == "__main__":
         action = float(action['u_lr'][0][0])
         reward = float(reward)
         history[t] = np.array([theta_LR, theta_1, theta_2, action, reward])
-        # env.render()
+        env.render()
         if terminated:
             state = env.reset()
     env.close()
